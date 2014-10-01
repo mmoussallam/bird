@@ -83,9 +83,9 @@ def _single_mp_run(x, Phi, bound, max_iter, verbose=False, pad=0,
         # find scale and frequency bin of selected atom
         mdct_wf = memory.cache(mdct_waveform)
 
-        scale_idx = idx / n
+        scale_idx = idx // n
         size = Phi.sizes[scale_idx]
-        F = n / (size / 2)
+        F = n // (size // 2)
         frame = (idx - (scale_idx * n)) % F
         freq_bin = ((idx - (scale_idx * n))) // F
         pos = (frame * size / 2) - size / 4 + rndshifts[scale_idx]
@@ -359,7 +359,7 @@ def bird(X, scales, n_runs, p_above, random_state=None, n_jobs=1,
     # size of the full shift-invariant dictionary
     M = np.sum(np.array(scales) / 2) * N
     sigma = sqrt((1.0 - (2.0 / np.pi)) / float(N))
-    Lambda_W = sigma * sqrt(2.0) * erfinv((1.0 - p_above) ** (1.0 / long(M)))
+    Lambda_W = sigma * sqrt(2.0) * erfinv((1.0 - p_above) ** (1.0 / float(M)))
     print("Starting BIRD with MDCT dictionary of %d Atoms. "
           "Lambda_W=%1.3f, n_runs=%d,\n (can take a "
           "while)" % (M, Lambda_W, n_runs))
@@ -421,7 +421,7 @@ def s_bird(X, scales, n_runs, p_above, p_active=1, random_state=None,
     # size of the full shift-invariant dictionary
     M = np.sum(np.array(scales) / 2) * n_samples
     sigma = sqrt((1.0 - (2.0 / np.pi)) / float(n_samples))
-    Lambda_W = sigma * sqrt(2.0) * erfinv((1.0 - p_above) ** (1.0 / long(M)))
+    Lambda_W = sigma * sqrt(2.0) * erfinv((1.0 - p_above) ** (1.0 / float(M)))
 
     lint = int(n_channels * p_active)
 

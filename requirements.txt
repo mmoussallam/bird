@@ -1,2 +1,3 @@
 joblib
 nose
+six

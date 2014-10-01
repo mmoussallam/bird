@@ -7,6 +7,7 @@ import math
 import numpy as np
 from scipy import linalg
 from scipy.fftpack import fft, ifft
+import six
 
 
 def _framing(a, L):
@@ -186,7 +187,7 @@ def imdct(y, L):
         z[-2 * K:] += x
         return z
 
-    x = reduce(overlap_add, [x[:, i] for i in range(x.shape[1])])
+    x = six.moves.reduce(overlap_add, [x[:, i] for i in range(x.shape[1])])
 
     # Cut edges
     x = x[K // 2:-K // 2].copy()

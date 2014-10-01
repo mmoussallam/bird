@@ -38,13 +38,13 @@ def test_bird():
     data = X + noise
 
     X_denoised = bird(data, scales, n_runs, p_above=p_above, random_state=42,
-                      n_jobs=-1, verbose=verbose)
+                      n_jobs=1, verbose=verbose)
     # test denoised estimate is close to original
     assert_array_almost_equal(X_denoised, truth, decimal=2)
 
     # test second call produce same result
     X_denoised_again = bird(data, scales, n_runs, p_above=p_above,
-                            random_state=42, n_jobs=-1, verbose=verbose)
+                            random_state=42, n_jobs=1, verbose=verbose)
     assert_array_almost_equal(X_denoised, X_denoised_again, decimal=8)
 
 
@@ -76,7 +76,7 @@ def test_sbird():
         data[chan, :] = X[chan, :] + noise
 
     X_denoised = s_bird(data, scales, n_runs, p_above=p_above, random_state=42,
-                      n_jobs=-1, verbose=verbose)
+                      n_jobs=1, verbose=verbose)
     # test denoised estimate is close to original
     assert_array_almost_equal(X_denoised, truth, decimal=2)
 
