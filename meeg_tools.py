@@ -6,7 +6,7 @@
 import numpy as np
 
 import mne
-from mne.fiff import pick_types_evoked, pick_types_forward
+from mne import pick_types_evoked, pick_types_forward
 from mne.datasets import sample
 from mne.time_frequency import iir_filter_raw, morlet
 from mne.simulation import generate_sparse_stc, generate_evoked
@@ -14,7 +14,7 @@ from mne.simulation import generate_sparse_stc, generate_evoked
 ###############################################################################
 # Load real data as templates
 data_path= sample.data_path()
-raw = mne.fiff.Raw(data_path + '/MEG/sample/sample_audvis_raw.fif')
+raw = mne.io.Raw(data_path + '/MEG/sample/sample_audvis_raw.fif')
 proj = mne.read_proj(data_path + '/MEG/sample/sample_audvis_ecg_proj.fif')
 raw.info['projs'] += proj
 raw.info['bads'] = ['MEG 2443', 'EEG 053']  # mark bad channels
@@ -28,7 +28,7 @@ fwd = pick_types_forward(fwd, meg=True, eeg=True, exclude=raw.info['bads'])
 
 cov = mne.read_cov(cov_fname)
 
-evoked_template = mne.fiff.read_evoked(ave_fname, setno=0, baseline=None)
+evoked_template = mne.read_evokeds(ave_fname, condition=0, baseline=None)
 evoked_template = pick_types_evoked(evoked_template, meg=True, eeg=True,
                                     exclude=raw.info['bads'])
 
@@ -61,7 +61,7 @@ def simu_meg(snr=6, white=True, seed=None):
 
     ###############################################################################
     # Generate noisy evoked data
-    picks = mne.fiff.pick_types(raw.info, meg=True, exclude='bads')
+    picks = mne.pick_types(raw.info, meg=True, exclude='bads')
     if white:
         iir_filter = None  # for white noise
     else:
@@ -94,7 +94,7 @@ def simu_bimodal_meg(snr=6, white=True, seed=None, freqs=[3, 50], n_cycles=[1, 1
 
     ###############################################################################
     # Generate noisy evoked data
-    picks = mne.fiff.pick_types(raw.info, meg=True, exclude='bads')
+    picks = mne.pick_types(raw.info, meg=True, exclude='bads')
     if white:
         iir_filter = None  # for white noise
     else:

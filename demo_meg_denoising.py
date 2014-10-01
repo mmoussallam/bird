@@ -5,6 +5,8 @@
 
 from meeg_tools import simu_meg
 from bird import bird, s_bird
+from joblib import Memory
+
 
 if __name__ == '__main__':
     SNR = 6.
@@ -28,10 +30,14 @@ if __name__ == '__main__':
     evoked_noise = simu_meg(snr=SNR, white=white, seed=seed)
     single_noise = evoked_noise.data[:n_channels, :]  # * 1e12
 
+    n_jobs = 1
+    memory = Memory(None)
     sbird_estimate = s_bird(single_noise, scales, n_runs, p_above=1e-8,
-                            p_active=l, random_state=random_state)
+                            p_active=l, random_state=random_state,
+                            n_jobs=1, memory=memory)
     bird_estimate = bird(single_noise, scales, n_runs, p_above=1e-8,
-                         random_state=random_state)
+                         random_state=random_state, n_jobs=1,
+                         memory=memory)
 
     subset = range(1, n_channels, 2)
     start = 100  # make time start at 0
