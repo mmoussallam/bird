@@ -40,7 +40,7 @@ def check_random_state(seed):
 
 
 def _single_mp_run(x, Phi, bound, max_iter, verbose=False, pad=0,
-                   random_state=None, memory=None):
+                   random_state=None, memory=Memory(None)):
     """ run of the RSSMP algorithm """
 
     rng = check_random_state(random_state)
@@ -110,7 +110,7 @@ def _single_mp_run(x, Phi, bound, max_iter, verbose=False, pad=0,
 
 def _single_multichannel_mp_run(X, Phi, bound, selection_rule, stop_crit,
                                 max_iter, verbose=False, pad=0,
-                                random_state=None, memory=None):
+                                random_state=None, memory=Memory(None)):
     """ run of the structured variant of the RSSMP algorithm """
     rng = check_random_state(random_state)
 
@@ -148,8 +148,8 @@ def _single_multichannel_mp_run(X, Phi, bound, selection_rule, stop_crit,
         for s_idx, L in enumerate(Phi.sizes):
             shift = rng.randint(low=0, high=L / 4)
             for c_idx in range(n_channels):
-                coeffs[c_idx, s_idx * n_samples:(s_idx + 1) * n_samples] = mdct(
-                    residual[c_idx, shift:shift + n_samples], L).ravel()
+                coeffs[c_idx, s_idx * n_samples:(s_idx + 1) * n_samples] = \
+                    mdct(residual[c_idx, shift:shift + n_samples], L).ravel()
                 rndshifts[c_idx].append(shift)
 
         # Multichannel mode : we combine projections
@@ -207,7 +207,8 @@ def _pad(X):
 
 
 def _denoise(seeds, x, dico, sup_bound, n_atoms, verbose=False, indep=True,
-             stop_crit=None, selection_rule=None, pad=0, memory=None):
+             stop_crit=None, selection_rule=None, pad=0,
+             memory=Memory(None)):
     """ multiple rssmp runs with a smart stopping criterion using
     the convergence decay monitoring
     """
@@ -235,15 +236,15 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
                stop_crit=np.mean,
                selection_rule=np.sum,
                n_jobs=1, indep=True,
-               random_state=None, memory=None, verbose=False):
+               random_state=None, memory=Memory(None), verbose=False):
     """Automatically detect when noise zone has been reached and stop
     MP at this point
 
     Parameters
     ----------
     X : array, shape (n_channels, n_times)
-        The numpy n_channels-vy-N array to be denoised where n_channels is number of sensors
-        and N the dimension
+        The numpy n_channels-vy-N array to be denoised where n_channels is
+        number of sensors and N the dimension
     scales : lists
         The list of MDCT scales that will be used to built the
         dictionary Phi
@@ -256,8 +257,8 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
     stop_crit : function
         controls the calculation of Lambda
     selection_rule : function
-        controls the way multiple channel projections are combined for atom selection
-        only used if indep=False
+        controls the way multiple channel projections are combined for atom
+        selection only used if indep=False
     n_jobs : int
         number of jobs to run in parallel
     indep : bool
@@ -265,8 +266,8 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
         False for S-BIRD (structured sparsity seeked)
     random_state : None | int | np.random.RandomState
         To specify the random generator state (seed).
-    memory : instance of Memory | None
-        The object to use to cache some computations. If None, no
+    memory : instance of Memory
+        The object to use to cache some computations. If cachedir is None, no
         caching is performed.
     verbose : bool
         verbose mode
@@ -291,22 +292,24 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
         # Independent treat of each channel (plain BIRD)
         for r, x in zip(X_denoise, X):
             this_approx = Parallel(n_jobs=n_jobs)(
-                        delayed(_denoise)(this_seeds, x, Phi, Lambda_W, max_iter,
-                                      pad=pad, verbose=verbose, memory=memory)
-                                      for this_seeds in
-                                      np.array_split(seeds, n_jobs))
+                        delayed(_denoise)(this_seeds, x, Phi, Lambda_W,
+                                          max_iter, pad=pad, verbose=verbose,
+                                          memory=memory)
+                                          for this_seeds in
+                                          np.array_split(seeds, n_jobs))
             this_approx = sum(this_approx[1:], this_approx[0])
             r[:] = sum([a[pad:-pad] for a in this_approx])
             approx.append(this_approx)
     else:
         # data need to be processed jointly
         this_approx = Parallel(n_jobs=n_jobs)(
-                        delayed(_denoise)(this_seeds, X, Phi, Lambda_W, max_iter,
-                                    pad=pad, verbose=verbose,
-                                    selection_rule=selection_rule,
-                                    indep=False, memory=memory,
-                                    stop_crit=stop_crit) for this_seeds in
-                                    np.array_split(seeds, n_jobs))
+                        delayed(_denoise)(this_seeds, X, Phi, Lambda_W,
+                                          max_iter, pad=pad, verbose=verbose,
+                                          selection_rule=selection_rule,
+                                          indep=False, memory=memory,
+                                          stop_crit=stop_crit)
+                                          for this_seeds in
+                                          np.array_split(seeds, n_jobs))
 
         # reconstruction by averaging
         for jidx in range(len(this_approx)):
@@ -318,7 +321,7 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
 
 
 def bird(X, scales, n_runs, p_above, random_state=None, n_jobs=1,
-         memory=None, verbose=False):
+         memory=Memory(None), verbose=False):
     """ The BIRD algorithm as described in the paper
 
     Parameters
@@ -338,8 +341,8 @@ def bird(X, scales, n_runs, p_above, random_state=None, n_jobs=1,
         To specify the random generator state (seed).
     n_jobs : int
         The number of jobs to run in parallel.
-    memory : instance of Memory | None
-        The object to use to cache some computations. If None, no
+    memory : instance of Memory
+        The object to use to cache some computations. If cachedir is None, no
         caching is performed.
     verbose : bool
         verbose mode
@@ -350,8 +353,6 @@ def bird(X, scales, n_runs, p_above, random_state=None, n_jobs=1,
         The X_denoised data.
     """
     X, prepad = _pad(X)
-
-    memory = Memory(memory)
 
     # Computing Lambda_W(Phi, p_above)
     N = float(X.shape[1])
@@ -380,7 +381,7 @@ def selection_rule(projections_matrix, lint):
 
 
 def s_bird(X, scales, n_runs, p_above, p_active=1, random_state=None,
-           n_jobs=1, memory=None, verbose=False):
+           n_jobs=1, memory=Memory(None), verbose=False):
     """ Multichannel version of BIRD (S-BIRD) seeking Structured Sparsity
 
     Parameters
@@ -402,8 +403,8 @@ def s_bird(X, scales, n_runs, p_above, p_active=1, random_state=None,
         To specify the random generator state (seed).
     n_jobs : int
         The number of jobs to run in parallel.
-    memory : instance of Memory | None
-        The object to use to cache some computations. If None, no
+    memory : instance of Memory
+        The object to use to cache some computations. If cachedir is None, no
         caching is performed.
     verbose : bool
         verbose mode
@@ -429,7 +430,7 @@ def s_bird(X, scales, n_runs, p_above, p_active=1, random_state=None,
 
     print("Starting S-BIRD with MDCT dictionary of %d Atoms."
           " Lambda_W=%1.3f, n_runs=%d, p_active=%1.1f" % (M, Lambda_W,
-                                                            n_runs, p_active))
+                                                          n_runs, p_active))
     denoised = _bird_core(X, scales, n_runs, Lambda_W, verbose=verbose,
                           stop_crit=this_stop_crit, n_jobs=n_jobs,
                           selection_rule=this_selection_rule,
@@ -455,18 +456,18 @@ if __name__ == '__main__':
     p_above = 1.0 / M
     # creating noisy mix using classic doppler signal
     rng = np.random.RandomState(42)
-    target_snr = 0
+    target_snr = 0.
     x = np.linspace(0, 1, N)
     doppler = np.sqrt(x * (1 - x)) * np.sin((2.1 * np.pi) / (x + .05))
     X = doppler.reshape((1, N))
     X = X / linalg.norm(X)
     truth = X.copy()
     noise = rng.randn(*truth.shape)
-    noise = 0.3 * np.exp(-float(target_snr) / 10.0) * noise / linalg.norm(noise)
-    snr = 20 * np.log10(linalg.norm(X) / linalg.norm(noise))
+    noise = 0.3 * np.exp(-target_snr / 10.0) * noise / linalg.norm(noise)
+    snr = 20. * np.log10(linalg.norm(X) / linalg.norm(noise))
     data = X + noise
 
-    memory = None
+    memory = Memory(None)
 
     print("SNR = %s." % snr)
     print("Dictionary of {0} atoms with {1} runs: chose "
