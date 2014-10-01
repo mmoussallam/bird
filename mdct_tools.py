@@ -7,9 +7,6 @@ import math
 import numpy as np
 from scipy import linalg
 from scipy.fftpack import fft, ifft
-from joblib import Memory
-
-memory = Memory(cachedir='C:/tmp', verbose=0)
 
 
 def _framing(a, L):
@@ -19,7 +16,6 @@ def _framing(a, L):
                                            strides=strides)[::L // 2].T.copy()
 
 
-@memory.cache
 def mdct_waveform(scale, freq_bin):
     L = float(scale)
     K = L / 2.0

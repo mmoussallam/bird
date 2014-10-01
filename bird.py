@@ -17,7 +17,7 @@ import numpy as np
 from scipy.special import erfinv
 from scipy import linalg
 
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, Memory
 from mdct_tools import mdct_waveform, mdct, MDCT
 
 
@@ -40,7 +40,7 @@ def check_random_state(seed):
 
 
 def _single_mp_run(x, Phi, bound, max_iter, verbose=False, pad=0,
-                   random_state=None):
+                   random_state=None, memory=None):
     """ run of the RSSMP algorithm """
 
     rng = check_random_state(random_state)
@@ -81,24 +81,25 @@ def _single_mp_run(x, Phi, bound, max_iter, verbose=False, pad=0,
 
         # Only one method now : local update via a cached waveform
         # find scale and frequency bin of selected atom
+        mdct_wf = memory.cache(mdct_waveform)
+
         scale_idx = idx / n
         size = Phi.sizes[scale_idx]
         F = n / (size / 2)
         frame = (idx - (scale_idx * n)) % F
         freq_bin = ((idx - (scale_idx * n))) // F
         pos = (frame * size / 2) - size / 4 + rndshifts[scale_idx]
-        residual[pos:pos + size] -= coeffs[idx] * mdct_waveform(size, freq_bin)
+        residual[pos:pos + size] -= coeffs[idx] * mdct_wf(size, freq_bin)
 
         # also add it to the reconstruction
-        x_est[pos:pos + size] += coeffs[idx] * mdct_waveform(size, freq_bin)
+        x_est[pos:pos + size] += coeffs[idx] * mdct_wf(size, freq_bin)
 
         # error computation (err_mse)
         err_mse.append(linalg.norm(residual))
 
         current_lambda = np.sqrt(1 - err_mse[-1] / err_mse[-2])
         if current_lambda <= bound:
-            x_est[pos:pos + size] -= coeffs[idx] * mdct_waveform(size,
-                                                                 freq_bin)
+            x_est[pos:pos + size] -= coeffs[idx] * mdct_wf(size, freq_bin)
         if verbose:
             print("Iteration %d : Current lambda of %1.4f" % (
                   it_number, current_lambda))
@@ -109,7 +110,7 @@ def _single_mp_run(x, Phi, bound, max_iter, verbose=False, pad=0,
 
 def _single_multichannel_mp_run(X, Phi, bound, selection_rule, stop_crit,
                                 max_iter, verbose=False, pad=0,
-                                random_state=None):
+                                random_state=None, memory=None):
     """ run of the structured variant of the RSSMP algorithm """
     rng = check_random_state(random_state)
 
@@ -157,11 +158,13 @@ def _single_multichannel_mp_run(X, Phi, bound, selection_rule, stop_crit,
         # Select a new element
         idx = np.argmax(np.abs(combined))
         # find scale and frequency bin of selected atom
-        s_idx = idx / n_samples
+        s_idx = idx // n_samples
         L = Phi.sizes[s_idx]
-        F = n_samples / (L / 2)
+        F = n_samples // (L // 2)
         frame = (idx - (s_idx * n_samples)) % F
         freq_bin = ((idx - (s_idx * n_samples))) // F
+
+        mdct_wf = memory.cache(mdct_waveform)
 
         # Update coefficients and residual
         current_lambda_array = np.zeros(n_channels)
@@ -171,11 +174,11 @@ def _single_multichannel_mp_run(X, Phi, bound, selection_rule, stop_crit,
             # Only one method now : local update via a cached waveform
             pos = (frame * L / 2) - L / 4 + rndshifts[c_idx][s_idx]
             residual[c_idx, pos:pos + L] -= coeffs[c_idx, idx] * \
-                mdct_waveform(L, freq_bin)
+                mdct_wf(L, freq_bin)
 
             # also add it to the reconstruction
             X_est[c_idx, pos:pos + L] += coeffs[c_idx, idx] * \
-                mdct_waveform(L, freq_bin)
+                mdct_wf(L, freq_bin)
 
             # error computation (err_mse)
             err_mse[c_idx].append(linalg.norm(residual[c_idx, :]))
@@ -204,7 +207,7 @@ def _pad(X):
 
 
 def _denoise(seeds, x, dico, sup_bound, n_atoms, verbose=False, indep=True,
-             stop_crit=None, selection_rule=None, pad=0):
+             stop_crit=None, selection_rule=None, pad=0, memory=None):
     """ multiple rssmp runs with a smart stopping criterion using
     the convergence decay monitoring
     """
@@ -215,14 +218,16 @@ def _denoise(seeds, x, dico, sup_bound, n_atoms, verbose=False, indep=True,
         if indep:
             approx.append(_single_mp_run(x, dico, sup_bound, n_atoms,
                                          verbose=verbose, pad=pad,
-                                         random_state=seed)[0])
+                                         random_state=seed,
+                                         memory=memory)[0])
         else:
             approx.append(_single_multichannel_mp_run(x, dico, sup_bound,
                                                       selection_rule,
                                                       stop_crit,
                                                       n_atoms, verbose=verbose,
                                                       pad=pad,
-                                                      random_state=seed)[0])
+                                                      random_state=seed,
+                                                      memory=memory)[0])
     return approx
 
 
@@ -230,7 +235,7 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
                stop_crit=np.mean,
                selection_rule=np.sum,
                n_jobs=1, indep=True,
-               random_state=None, verbose=False):
+               random_state=None, memory=None, verbose=False):
     """Automatically detect when noise zone has been reached and stop
     MP at this point
 
@@ -260,6 +265,9 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
         False for S-BIRD (structured sparsity seeked)
     random_state : None | int | np.random.RandomState
         To specify the random generator state (seed).
+    memory : instance of Memory | None
+        The object to use to cache some computations. If None, no
+        caching is performed.
     verbose : bool
         verbose mode
 
@@ -284,7 +292,8 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
         for r, x in zip(X_denoise, X):
             this_approx = Parallel(n_jobs=n_jobs)(
                         delayed(_denoise)(this_seeds, x, Phi, Lambda_W, max_iter,
-                                      pad=pad, verbose=verbose) for this_seeds in
+                                      pad=pad, verbose=verbose, memory=memory)
+                                      for this_seeds in
                                       np.array_split(seeds, n_jobs))
             this_approx = sum(this_approx[1:], this_approx[0])
             r[:] = sum([a[pad:-pad] for a in this_approx])
@@ -295,8 +304,8 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
                         delayed(_denoise)(this_seeds, X, Phi, Lambda_W, max_iter,
                                     pad=pad, verbose=verbose,
                                     selection_rule=selection_rule,
-                                    indep=False, stop_crit=stop_crit)
-                                    for this_seeds in
+                                    indep=False, memory=memory,
+                                    stop_crit=stop_crit) for this_seeds in
                                     np.array_split(seeds, n_jobs))
 
         # reconstruction by averaging
@@ -309,7 +318,7 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
 
 
 def bird(X, scales, n_runs, p_above, random_state=None, n_jobs=1,
-         verbose=False):
+         memory=None, verbose=False):
     """ The BIRD algorithm as described in the paper
 
     Parameters
@@ -329,6 +338,9 @@ def bird(X, scales, n_runs, p_above, random_state=None, n_jobs=1,
         To specify the random generator state (seed).
     n_jobs : int
         The number of jobs to run in parallel.
+    memory : instance of Memory | None
+        The object to use to cache some computations. If None, no
+        caching is performed.
     verbose : bool
         verbose mode
 
@@ -338,6 +350,8 @@ def bird(X, scales, n_runs, p_above, random_state=None, n_jobs=1,
         The X_denoised data.
     """
     X, prepad = _pad(X)
+
+    memory = Memory(memory)
 
     # Computing Lambda_W(Phi, p_above)
     N = float(X.shape[1])
@@ -350,7 +364,7 @@ def bird(X, scales, n_runs, p_above, random_state=None, n_jobs=1,
           "while)" % (M, Lambda_W, n_runs))
     X_denoised = _bird_core(X, scales, n_runs, Lambda_W, verbose=verbose,
                             max_iter=100, indep=True, n_jobs=n_jobs,
-                            random_state=random_state)
+                            random_state=random_state, memory=memory)
     return X_denoised[:, prepad:]
 
 
@@ -366,7 +380,7 @@ def selection_rule(projections_matrix, lint):
 
 
 def s_bird(X, scales, n_runs, p_above, p_active=1, random_state=None,
-           n_jobs=1, verbose=False):
+           n_jobs=1, memory=None, verbose=False):
     """ Multichannel version of BIRD (S-BIRD) seeking Structured Sparsity
 
     Parameters
@@ -388,6 +402,9 @@ def s_bird(X, scales, n_runs, p_above, p_active=1, random_state=None,
         To specify the random generator state (seed).
     n_jobs : int
         The number of jobs to run in parallel.
+    memory : instance of Memory | None
+        The object to use to cache some computations. If None, no
+        caching is performed.
     verbose : bool
         verbose mode
 
@@ -416,9 +433,10 @@ def s_bird(X, scales, n_runs, p_above, p_active=1, random_state=None,
     denoised = _bird_core(X, scales, n_runs, Lambda_W, verbose=verbose,
                           stop_crit=this_stop_crit, n_jobs=n_jobs,
                           selection_rule=this_selection_rule,
-                          indep=False)
+                          indep=False, memory=memory)
 
     return denoised[:, prepad:]
+
 
 if __name__ == '__main__':
     """ run a demo here"""
@@ -448,11 +466,13 @@ if __name__ == '__main__':
     snr = 20 * np.log10(linalg.norm(X) / linalg.norm(noise))
     data = X + noise
 
+    memory = None
+
     print("SNR = %s." % snr)
     print("Dictionary of {0} atoms with {1} runs: chose "
           "p_above={2}".format(M, n_runs, p_above))
     X_denoised = bird(data, scales, n_runs, p_above=p_above, random_state=42,
-                      n_jobs=-1, verbose=verbose)
+                      n_jobs=-1, verbose=verbose, memory=memory)
 
     residual = X_denoised - truth
     print("Noisy Signal at %1.3f dB gave a RMSE of "
