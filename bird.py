@@ -245,7 +245,7 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
     X : array, shape (n_channels, n_times)
         The numpy n_channels-vy-N array to be denoised where n_channels is
         number of sensors and N the dimension
-    scales : lists
+    scales : list
         The list of MDCT scales that will be used to built the
         dictionary Phi
     n_runs : int
@@ -256,7 +256,7 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
         Maximum number of iterations (serves as alternate stopping criterion)
     stop_crit : function
         controls the calculation of Lambda
-    selection_rule : function
+    selection_rule : callable
         controls the way multiple channel projections are combined for atom
         selection only used if indep=False
     n_jobs : int
@@ -294,7 +294,7 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
             this_approx = Parallel(n_jobs=n_jobs)(
                         delayed(_denoise)(this_seeds, x, Phi, Lambda_W,
                                           max_iter, pad=pad, verbose=verbose,
-                                          memory=memory)
+                                          indep=True, memory=memory)
                                           for this_seeds in
                                           np.array_split(seeds, n_jobs))
             this_approx = sum(this_approx[1:], this_approx[0])
@@ -320,8 +320,8 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
     return X_denoise
 
 
-def bird(X, scales, n_runs, p_above, random_state=None, n_jobs=1,
-         memory=Memory(None), verbose=False):
+def bird(X, scales, n_runs, p_above, max_iter=100, random_state=None,
+         n_jobs=1, memory=Memory(None), verbose=False):
     """ The BIRD algorithm as described in the paper
 
     Parameters
@@ -329,7 +329,7 @@ def bird(X, scales, n_runs, p_above, random_state=None, n_jobs=1,
     X : array, shape (n_channels, n_times)
         The numpy n_channels-vy-N array to be X_denoised where n_channels
         is number of sensors and n_times the dimension
-    scales : lists
+    scales : list
         The list of MDCT scales that will be used to built the
         dictionary Phi
     n_runs : int
@@ -337,8 +337,12 @@ def bird(X, scales, n_runs, p_above, random_state=None, n_jobs=1,
     p_above : float
         probability of appearance of the max above which the noise hypothesis
         is considered false
+    max_iter : int
+        The maximum number of iterations in one pursuit.
     random_state : None | int | np.random.RandomState
         To specify the random generator state (seed).
+    max_iter : int
+        The maximum number of iterations in one pursuit.
     n_jobs : int
         The number of jobs to run in parallel.
     memory : instance of Memory
@@ -364,7 +368,7 @@ def bird(X, scales, n_runs, p_above, random_state=None, n_jobs=1,
           "Lambda_W=%1.3f, n_runs=%d,\n (can take a "
           "while)" % (M, Lambda_W, n_runs))
     X_denoised = _bird_core(X, scales, n_runs, Lambda_W, verbose=verbose,
-                            max_iter=100, indep=True, n_jobs=n_jobs,
+                            max_iter=max_iter, indep=True, n_jobs=n_jobs,
                             random_state=random_state, memory=memory)
     return X_denoised[:, prepad:]
 
@@ -380,8 +384,8 @@ def selection_rule(projections_matrix, lint):
     return np.mean(sorted_projs[-lint:, :], axis=0)
 
 
-def s_bird(X, scales, n_runs, p_above, p_active=1, random_state=None,
-           n_jobs=1, memory=Memory(None), verbose=False):
+def s_bird(X, scales, n_runs, p_above, p_active=1, max_iter=100,
+           random_state=None, n_jobs=1, memory=Memory(None), verbose=False):
     """ Multichannel version of BIRD (S-BIRD) seeking Structured Sparsity
 
     Parameters
@@ -399,6 +403,8 @@ def s_bird(X, scales, n_runs, p_above, p_active=1, random_state=None,
         is considered false
     p_active : float
         proportion of active channels (l in the paper)
+    max_iter : int
+        The maximum number of iterations in one pursuit.
     random_state : None | int | np.random.RandomState
         To specify the random generator state (seed).
     n_jobs : int
@@ -434,6 +440,7 @@ def s_bird(X, scales, n_runs, p_above, p_active=1, random_state=None,
     denoised = _bird_core(X, scales, n_runs, Lambda_W, verbose=verbose,
                           stop_crit=this_stop_crit, n_jobs=n_jobs,
                           selection_rule=this_selection_rule,
+                          max_iter=max_iter,
                           indep=False, memory=memory)
 
     return denoised[:, prepad:]
