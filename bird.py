@@ -365,8 +365,7 @@ def bird(X, scales, n_runs, p_above, max_iter=100, random_state=None,
     sigma = sqrt((1.0 - (2.0 / np.pi)) / float(N))
     Lambda_W = sigma * sqrt(2.0) * erfinv((1.0 - p_above) ** (1.0 / float(M)))
     print("Starting BIRD with MDCT dictionary of %d Atoms. "
-          "Lambda_W=%1.3f, n_runs=%d,\n (can take a "
-          "while)" % (M, Lambda_W, n_runs))
+          "Lambda_W=%1.3f, n_runs=%d" % (M, Lambda_W, n_runs))
     X_denoised = _bird_core(X, scales, n_runs, Lambda_W, verbose=verbose,
                             max_iter=max_iter, indep=True, n_jobs=n_jobs,
                             random_state=random_state, memory=memory)
