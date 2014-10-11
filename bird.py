@@ -282,7 +282,7 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
     X_denoise = np.zeros_like(X)
     approx = []
     rng = check_random_state(random_state)
-    seeds = rng.randint(np.iinfo(np.int).max, size=n_runs)
+    seeds = rng.randint(4294967295, size=n_runs)  # < max seed value
 
     if n_jobs <= 0:
         n_cores = multiprocessing.cpu_count()
