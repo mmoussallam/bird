@@ -4,7 +4,7 @@
 # License: BSD (3-clause)
 
 from scipy import linalg
-from bird.meeg_tools import simu_meg
+from meeg_tools import simu_meg
 from bird import bird, s_bird
 from joblib import Memory
 
