@@ -11,4 +11,4 @@ virtualenv:
 before_install:
  - sudo apt-get install -qq python-numpy python-scipy
 # command to run tests, e.g. python setup.py test
-script:  nosetests
+script:  nosetests bird
