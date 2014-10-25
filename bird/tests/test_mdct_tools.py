@@ -5,7 +5,7 @@
 
 import numpy as np
 from numpy.testing import assert_array_almost_equal
-from mdct_tools import mdct, imdct
+from bird.mdct_tools import mdct, imdct
 
 
 def test_mdct():
