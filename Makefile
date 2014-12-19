@@ -6,7 +6,7 @@ PYTHON ?= python
 NOSETESTS ?= nosetests
 CTAGS ?= ctags
 
-all: clean inplace test test-doc
+all: clean inplace test
 
 clean-pyc:
 	find . -name "*.pyc" | xargs rm -f

@@ -52,7 +52,7 @@ def _single_mp_run(x, Phi, bound, max_iter, verbose=False, pad=0,
     err_mse = []
 
     # Initialisation
-    residual = np.concatenate((x.copy(), np.zeros(max(Phi.sizes) / 2)))
+    residual = np.concatenate((x.copy(), np.zeros(max(Phi.sizes) // 2)))
 
     s = np.zeros(m)
     x_est = np.zeros(n)
@@ -68,7 +68,7 @@ def _single_mp_run(x, Phi, bound, max_iter, verbose=False, pad=0,
         # pick a shift at random : in each size
         rndshifts = []
         for scale_idx, size in enumerate(Phi.sizes):
-            shift = rng.randint(low=0, high=size / 4)
+            shift = rng.randint(low=0, high=size // 4)
             coeffs[scale_idx * n:(scale_idx + 1) * n] = mdct(
                 residual[shift:shift + n], size).ravel()
             rndshifts.append(shift)
@@ -88,7 +88,7 @@ def _single_mp_run(x, Phi, bound, max_iter, verbose=False, pad=0,
         F = n // (size // 2)
         frame = (idx - (scale_idx * n)) % F
         freq_bin = ((idx - (scale_idx * n))) // F
-        pos = (frame * size / 2) - size / 4 + rndshifts[scale_idx]
+        pos = (frame * size // 2) - size // 4 + rndshifts[scale_idx]
         residual[pos:pos + size] -= coeffs[idx] * mdct_wf(size, freq_bin)
 
         # also add it to the reconstruction
