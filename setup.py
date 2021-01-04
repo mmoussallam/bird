@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 #
-# Copyright (C) 2014 Alexandre Gramfort <alexandre.gramfort@telecom-paristech.fr>
+# Copyright (C) 2014 Alexandre Gramfort <alexandre.gramfort@inria.fr>
 
 import os
 
@@ -23,7 +23,7 @@ descr = """BIRD"""
 DISTNAME = 'bird'
 DESCRIPTION = descr
 MAINTAINER = 'Alexandre Gramfort'
-MAINTAINER_EMAIL = 'alexandre.gramfort@telecom-paristech.fr'
+MAINTAINER_EMAIL = 'alexandre.gramfort@inria.fr'
 URL = 'https://github.com/mmoussallam/bird'
 LICENSE = 'BSD (3-clause)'
 DOWNLOAD_URL = 'https://github.com/mmoussallam/bird'
@@ -43,6 +43,7 @@ if __name__ == "__main__":
           url=URL,
           version=VERSION,
           download_url=DOWNLOAD_URL,
+          python_requires='>=2.7',
           long_description=open('README.rst').read(),
           zip_safe=False,  # the package can run out of an .egg file
           classifiers=['Intended Audience :: Science/Research',

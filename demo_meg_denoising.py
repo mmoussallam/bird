@@ -1,4 +1,4 @@
-# Authors: Alexandre Gramfort <alexandre.gramfort@telecom-paristech.fr>
+# Authors: Alexandre Gramfort <alexandre.gramfort@inria.fr>
 #          Manuel Moussallam <manuel.moussallam@gmail.com>
 #
 # License: BSD (3-clause)
@@ -10,25 +10,28 @@ from joblib import Memory
 
 
 if __name__ == '__main__':
-    SNR = 9.
     white = False  # change to True/False for white/pink noise
 
     scales = [8, 16, 32, 64, 128]
     n_runs = 30
 
     # Structured sparsity parameters
-    n_channels = 100
+    n_channels = 20  # Set this value to 20 to reproduce figures from the paper
     p_active = 1.
 
     random_state = 42
 
     # Reference true data
+    # Note : due to some changes in MNE, simulated data is no longer 
+    # parameterized using explicit SNR values, but rather using the NAVE parameter
+    # Look up some documentation there: https://mne.tools/dev/generated/mne.simulation.simulate_evoked.html#mne.simulation.simulate_evoked
     seed = 42
-    evoked_no_noise = simu_meg(snr=200, white=True, seed=seed)
+    evoked_no_noise = simu_meg(nave=10000, white=True, seed=seed)
     single_no_noise = evoked_no_noise.data[:n_channels, :]
 
-    # noisy simulation
-    evoked_noise = simu_meg(snr=SNR, white=white, seed=seed)
+    # noisy simulation : to simulate a SNR of approximately 10
+    # we use 10 times less averaged epochs (nave parameter set to 2000)
+    evoked_noise = simu_meg(nave=2000, white=white, seed=seed)
     single_noise = evoked_noise.data[:n_channels, :]
 
     n_jobs = 1  # set to -1 to run in parellel
@@ -62,7 +65,7 @@ if __name__ == '__main__':
                ('Noisy', 'Clean', 'BIRD Estimates', 'S-BIRD Estimates'),
                loc='upper right')
 
-    plt.xlabel('Time (ms)', fontsize=16.0)
+    plt.xlabel('Time (ms)')
     plt.ylabel('MEG')
-    plt.ylim([-1.5e-12, 2.0e-12])
+    plt.ylim([-1.5e-12, 2.5e-12])
     plt.show()

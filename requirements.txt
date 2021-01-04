@@ -1,3 +1,5 @@
+numpy
+scipy
 joblib
 nose
 six

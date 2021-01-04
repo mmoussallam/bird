@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Authors: Alexandre Gramfort <alexandre.gramfort@telecom-paristech.fr>
+# Authors: Alexandre Gramfort <alexandre.gramfort@inria.fr>
 #          Manuel Moussallam <manuel.moussallam@gmail.com>
 #
 # Algorithm presented here are described in:
@@ -18,7 +18,8 @@ from scipy.special import erfinv
 from scipy import linalg
 
 from joblib import Parallel, delayed, Memory
-from mdct_tools import mdct_waveform, mdct, MDCT
+
+from .mdct_tools import mdct_waveform, mdct, MDCT
 
 
 def check_random_state(seed):
@@ -35,12 +36,22 @@ def check_random_state(seed):
         return np.random.RandomState(seed)
     if isinstance(seed, np.random.RandomState):
         return seed
-    raise ValueError('%r cannot be used to seed a numpy.random.RandomState'
-                     ' instance' % seed)
+    raise ValueError(
+        "%r cannot be used to seed a numpy.random.RandomState"
+        " instance" % seed
+    )
 
 
-def _single_mp_run(x, Phi, bound, max_iter, verbose=False, pad=0,
-                   random_state=None, memory=Memory(None)):
+def _single_mp_run(
+    x,
+    Phi,
+    bound,
+    max_iter,
+    verbose=False,
+    pad=0,
+    random_state=None,
+    memory=Memory(None),
+):
     """ run of the RSSMP algorithm """
 
     rng = check_random_state(random_state)
@@ -69,8 +80,9 @@ def _single_mp_run(x, Phi, bound, max_iter, verbose=False, pad=0,
         rndshifts = []
         for scale_idx, size in enumerate(Phi.sizes):
             shift = rng.randint(low=0, high=size // 4)
-            coeffs[scale_idx * n:(scale_idx + 1) * n] = mdct(
-                residual[shift:shift + n], size).ravel()
+            coeffs[scale_idx * n: (scale_idx + 1) * n] = mdct(
+                residual[shift: shift + n], size
+            ).ravel()
             rndshifts.append(shift)
 
         # Select a new element
@@ -89,43 +101,55 @@ def _single_mp_run(x, Phi, bound, max_iter, verbose=False, pad=0,
         frame = (idx - (scale_idx * n)) % F
         freq_bin = ((idx - (scale_idx * n))) // F
         pos = (frame * size // 2) - size // 4 + rndshifts[scale_idx]
-        residual[pos:pos + size] -= coeffs[idx] * mdct_wf(size, freq_bin)
+        residual[pos: pos + size] -= coeffs[idx] * mdct_wf(size, freq_bin)
 
         # also add it to the reconstruction
-        x_est[pos:pos + size] += coeffs[idx] * mdct_wf(size, freq_bin)
+        x_est[pos: pos + size] += coeffs[idx] * mdct_wf(size, freq_bin)
 
         # error computation (err_mse)
         err_mse.append(linalg.norm(residual))
 
         current_lambda = np.sqrt(1 - err_mse[-1] / err_mse[-2])
         if current_lambda <= bound:
-            x_est[pos:pos + size] -= coeffs[idx] * mdct_wf(size, freq_bin)
+            x_est[pos: pos + size] -= coeffs[idx] * mdct_wf(size, freq_bin)
         if verbose:
-            print("Iteration %d : Current lambda of %1.4f" % (
-                  it_number, current_lambda))
+            print(
+                "Iteration %d : Current lambda of %1.4f"
+                % (it_number, current_lambda)
+            )
         it_number += 1
 
     return x_est, err_mse
 
 
-def _single_multichannel_mp_run(X, Phi, bound, selection_rule, stop_crit,
-                                max_iter, verbose=False, pad=0,
-                                random_state=None, memory=Memory(None)):
+def _single_multichannel_mp_run(
+    X,
+    Phi,
+    bound,
+    selection_rule,
+    stop_crit,
+    max_iter,
+    verbose=False,
+    pad=0,
+    random_state=None,
+    memory=Memory(None),
+):
     """ run of the structured variant of the RSSMP algorithm """
     rng = check_random_state(random_state)
 
     # padding as v stak
     pad = int(pad)
     n_channels = X.shape[0]
-    X = np.hstack((np.zeros((n_channels, pad)), X,
-                   np.zeros((n_channels, pad))))
+    X = np.hstack(
+        (np.zeros((n_channels, pad)), X, np.zeros((n_channels, pad)))
+    )
     n_samples = X.shape[1]
     n_projs = Phi.doth(X).shape[1]
     err_mse = {}
 
     # Initialisation
-    residual = np.hstack((X.copy(), np.zeros((n_channels,
-                                              max(Phi.sizes) / 2))))
+    residual = np.hstack((X.copy(),
+                          np.zeros((n_channels, max(Phi.sizes) // 2))))
 
     s_rep = np.zeros((n_channels, n_projs))
     X_est = np.zeros((n_channels, n_samples))
@@ -146,10 +170,11 @@ def _single_multichannel_mp_run(X, Phi, bound, selection_rule, stop_crit,
         for c_idx in range(n_channels):
             rndshifts[c_idx] = []
         for s_idx, L in enumerate(Phi.sizes):
-            shift = rng.randint(low=0, high=L / 4)
+            shift = rng.randint(low=0, high=L // 4)
             for c_idx in range(n_channels):
-                coeffs[c_idx, s_idx * n_samples:(s_idx + 1) * n_samples] = \
-                    mdct(residual[c_idx, shift:shift + n_samples], L).ravel()
+                coeffs[
+                    c_idx, s_idx * n_samples: (s_idx + 1) * n_samples
+                ] = mdct(residual[c_idx, shift: shift + n_samples], L).ravel()
                 rndshifts[c_idx].append(shift)
 
         # Multichannel mode : we combine projections
@@ -172,33 +197,38 @@ def _single_multichannel_mp_run(X, Phi, bound, selection_rule, stop_crit,
             s_rep[c_idx, idx] += coeffs[c_idx, idx]
 
             # Only one method now : local update via a cached waveform
-            pos = (frame * L / 2) - L / 4 + rndshifts[c_idx][s_idx]
-            residual[c_idx, pos:pos + L] -= coeffs[c_idx, idx] * \
-                mdct_wf(L, freq_bin)
+            pos = (frame * L // 2) - L // 4 + rndshifts[c_idx][s_idx]
+            residual[c_idx, pos: pos + L] -= coeffs[c_idx, idx] * mdct_wf(
+                L, freq_bin
+            )
 
             # also add it to the reconstruction
-            X_est[c_idx, pos:pos + L] += coeffs[c_idx, idx] * \
-                mdct_wf(L, freq_bin)
+            X_est[c_idx, pos: pos + L] += coeffs[c_idx, idx] * mdct_wf(
+                L, freq_bin
+            )
 
             # error computation (err_mse)
             err_mse[c_idx].append(linalg.norm(residual[c_idx, :]))
 
             current_lambda_array[c_idx] = np.sqrt(
-                1. - err_mse[c_idx][-1] / err_mse[c_idx][-2])
+                1.0 - err_mse[c_idx][-1] / err_mse[c_idx][-2]
+            )
 
         current_lambda = stop_crit(current_lambda_array)
 
         if verbose:
-            print("Iteration %d : Current lambda of %1.4f" % (
-                  it_number, current_lambda))
+            print(
+                "Iteration %d : Current lambda of %1.4f"
+                % (it_number, current_lambda)
+            )
         it_number += 1
 
-    return X_est[:, pad: -pad], err_mse
+    return X_est[:, pad:-pad], err_mse
 
 
 def _pad(X):
-    """ add zeroes on the border to make sure the signal length is a
-    power of two """
+    """add zeroes on the border to make sure the signal length is a
+    power of two"""
     p_above = int(np.floor(np.log2(X.shape[1])))
     M = 2 ** (p_above + 1) - X.shape[1]
     X = np.hstack((np.zeros((X.shape[0], M)), X))
@@ -206,10 +236,20 @@ def _pad(X):
     return X, M
 
 
-def _denoise(seeds, x, dico, sup_bound, n_atoms, verbose=False, indep=True,
-             stop_crit=None, selection_rule=None, pad=0,
-             memory=Memory(None)):
-    """ multiple rssmp runs with a smart stopping criterion using
+def _denoise(
+    seeds,
+    x,
+    dico,
+    sup_bound,
+    n_atoms,
+    verbose=False,
+    indep=True,
+    stop_crit=None,
+    selection_rule=None,
+    pad=0,
+    memory=Memory(None),
+):
+    """multiple rssmp runs with a smart stopping criterion using
     the convergence decay monitoring
     """
     approx = []
@@ -217,34 +257,58 @@ def _denoise(seeds, x, dico, sup_bound, n_atoms, verbose=False, indep=True,
         if verbose > 0:
             print("Run seed %d" % seed)
         if indep:
-            approx.append(_single_mp_run(x, dico, sup_bound, n_atoms,
-                                         verbose=verbose, pad=pad,
-                                         random_state=seed,
-                                         memory=memory)[0])
+            approx.append(
+                _single_mp_run(
+                    x,
+                    dico,
+                    sup_bound,
+                    n_atoms,
+                    verbose=verbose,
+                    pad=pad,
+                    random_state=seed,
+                    memory=memory,
+                )[0]
+            )
         else:
-            approx.append(_single_multichannel_mp_run(x, dico, sup_bound,
-                                                      selection_rule,
-                                                      stop_crit,
-                                                      n_atoms, verbose=verbose,
-                                                      pad=pad,
-                                                      random_state=seed,
-                                                      memory=memory)[0])
+            approx.append(
+                _single_multichannel_mp_run(
+                    x,
+                    dico,
+                    sup_bound,
+                    selection_rule,
+                    stop_crit,
+                    n_atoms,
+                    verbose=verbose,
+                    pad=pad,
+                    random_state=seed,
+                    memory=memory,
+                )[0]
+            )
     return approx
 
 
-def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
-               stop_crit=np.mean,
-               selection_rule=np.sum,
-               n_jobs=1, indep=True,
-               random_state=None, memory=Memory(None), verbose=False):
+def _bird_core(
+    X,
+    scales,
+    n_runs,
+    Lambda_W,
+    max_iter=100,
+    stop_crit=np.mean,
+    selection_rule=np.sum,
+    n_jobs=1,
+    indep=True,
+    random_state=None,
+    memory=Memory(None),
+    verbose=False,
+):
     """Automatically detect when noise zone has been reached and stop
     MP at this point
 
     Parameters
     ----------
     X : array, shape (n_channels, n_times)
-        The numpy n_channels-vy-N array to be denoised where n_channels is
-        number of sensors and N the dimension
+        The data to be denoised where n_channels is number of sensors
+        and n_times the dimension
     scales : list
         The list of MDCT scales that will be used to built the
         dictionary Phi
@@ -292,24 +356,40 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
         # Independent treat of each channel (plain BIRD)
         for r, x in zip(X_denoise, X):
             this_approx = Parallel(n_jobs=n_jobs)(
-                        delayed(_denoise)(this_seeds, x, Phi, Lambda_W,
-                                          max_iter, pad=pad, verbose=verbose,
-                                          indep=True, memory=memory)
-                                          for this_seeds in
-                                          np.array_split(seeds, n_jobs))
+                delayed(_denoise)(
+                    this_seeds,
+                    x,
+                    Phi,
+                    Lambda_W,
+                    max_iter,
+                    pad=pad,
+                    verbose=verbose,
+                    indep=True,
+                    memory=memory,
+                )
+                for this_seeds in np.array_split(seeds, n_jobs)
+            )
             this_approx = sum(this_approx[1:], this_approx[0])
             r[:] = sum([a[pad:-pad] for a in this_approx])
             approx.append(this_approx)
     else:
         # data need to be processed jointly
         this_approx = Parallel(n_jobs=n_jobs)(
-                        delayed(_denoise)(this_seeds, X, Phi, Lambda_W,
-                                          max_iter, pad=pad, verbose=verbose,
-                                          selection_rule=selection_rule,
-                                          indep=False, memory=memory,
-                                          stop_crit=stop_crit)
-                                          for this_seeds in
-                                          np.array_split(seeds, n_jobs))
+            delayed(_denoise)(
+                this_seeds,
+                X,
+                Phi,
+                Lambda_W,
+                max_iter,
+                pad=pad,
+                verbose=verbose,
+                selection_rule=selection_rule,
+                indep=False,
+                memory=memory,
+                stop_crit=stop_crit,
+            )
+            for this_seeds in np.array_split(seeds, n_jobs)
+        )
 
         # reconstruction by averaging
         for jidx in range(len(this_approx)):
@@ -320,9 +400,18 @@ def _bird_core(X, scales, n_runs, Lambda_W, max_iter=100,
     return X_denoise
 
 
-def bird(X, scales, n_runs, p_above, max_iter=100, random_state=None,
-         n_jobs=1, memory=Memory(None), verbose=False):
-    """ The BIRD algorithm as described in the paper
+def bird(
+    X,
+    scales,
+    n_runs,
+    p_above,
+    max_iter=100,
+    random_state=None,
+    n_jobs=1,
+    memory=Memory(None),
+    verbose=False,
+):
+    """The BIRD algorithm as described in the paper
 
     Parameters
     ----------
@@ -364,11 +453,22 @@ def bird(X, scales, n_runs, p_above, max_iter=100, random_state=None,
     M = np.sum(np.array(scales) / 2) * N
     sigma = sqrt((1.0 - (2.0 / np.pi)) / float(N))
     Lambda_W = sigma * sqrt(2.0) * erfinv((1.0 - p_above) ** (1.0 / float(M)))
-    print("Starting BIRD with MDCT dictionary of %d Atoms. "
-          "Lambda_W=%1.3f, n_runs=%d" % (M, Lambda_W, n_runs))
-    X_denoised = _bird_core(X, scales, n_runs, Lambda_W, verbose=verbose,
-                            max_iter=max_iter, indep=True, n_jobs=n_jobs,
-                            random_state=random_state, memory=memory)
+    print(
+        "Starting BIRD with MDCT dictionary of %d Atoms. "
+        "Lambda_W=%1.3f, n_runs=%d" % (M, Lambda_W, n_runs)
+    )
+    X_denoised = _bird_core(
+        X,
+        scales,
+        n_runs,
+        Lambda_W,
+        verbose=verbose,
+        max_iter=max_iter,
+        indep=True,
+        n_jobs=n_jobs,
+        random_state=random_state,
+        memory=memory,
+    )
     return X_denoised[:, prepad:]
 
 
@@ -383,9 +483,19 @@ def selection_rule(projections_matrix, lint):
     return np.mean(sorted_projs[-lint:, :], axis=0)
 
 
-def s_bird(X, scales, n_runs, p_above, p_active=1, max_iter=100,
-           random_state=None, n_jobs=1, memory=Memory(None), verbose=False):
-    """ Multichannel version of BIRD (S-BIRD) seeking Structured Sparsity
+def s_bird(
+    X,
+    scales,
+    n_runs,
+    p_above,
+    p_active=1,
+    max_iter=100,
+    random_state=None,
+    n_jobs=1,
+    memory=Memory(None),
+    verbose=False,
+):
+    """Multichannel version of BIRD (S-BIRD) seeking Structured Sparsity
 
     Parameters
     ----------
@@ -424,7 +534,7 @@ def s_bird(X, scales, n_runs, p_above, p_active=1, max_iter=100,
     n_channels = X.shape[0]
     n_samples = float(X.shape[1])
     # size of the full shift-invariant dictionary
-    M = np.sum(np.array(scales) / 2) * n_samples
+    M = np.sum(np.array(scales) // 2) * n_samples
     sigma = sqrt((1.0 - (2.0 / np.pi)) / float(n_samples))
     Lambda_W = sigma * sqrt(2.0) * erfinv((1.0 - p_above) ** (1.0 / float(M)))
 
@@ -433,13 +543,23 @@ def s_bird(X, scales, n_runs, p_above, p_active=1, max_iter=100,
     this_stop_crit = partial(stop_crit, lint=lint)  # XXX : check lint here
     this_selection_rule = partial(selection_rule, lint=lint)
 
-    print("Starting S-BIRD with MDCT dictionary of %d Atoms."
-          " Lambda_W=%1.3f, n_runs=%d, p_active=%1.1f" % (M, Lambda_W,
-                                                          n_runs, p_active))
-    denoised = _bird_core(X, scales, n_runs, Lambda_W, verbose=verbose,
-                          stop_crit=this_stop_crit, n_jobs=n_jobs,
-                          selection_rule=this_selection_rule,
-                          max_iter=max_iter,
-                          indep=False, memory=memory)
+    print(
+        "Starting S-BIRD with MDCT dictionary of %d Atoms."
+        " Lambda_W=%1.3f, n_runs=%d, p_active=%1.1f"
+        % (M, Lambda_W, n_runs, p_active)
+    )
+    denoised = _bird_core(
+        X,
+        scales,
+        n_runs,
+        Lambda_W,
+        verbose=verbose,
+        stop_crit=this_stop_crit,
+        n_jobs=n_jobs,
+        selection_rule=this_selection_rule,
+        max_iter=max_iter,
+        indep=False,
+        memory=memory,
+    )
 
     return denoised[:, prepad:]

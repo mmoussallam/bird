@@ -1,4 +1,4 @@
-# Authors: Alexandre Gramfort <alexandre.gramfort@telecom-paristech.fr>
+# Authors: Alexandre Gramfort <alexandre.gramfort@inria.fr>
 #          Manuel Moussallam <manuel.moussallam@gmail.com>
 #
 # License: BSD (3-clause)
